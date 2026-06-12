@@ -1,0 +1,208 @@
+0.conda环境配置
+conda create -n ChloroplastGenome
+conda activate ChloroplastGenome
+conda install -c bioconda getorganelle #getorganelle-1.7.7.1
+
+1.下载并拉取最新的内置植物细胞器数据库
+get_organelle_config.py --add embplant_pt,embplant_mt
+
+2.海大麦叶绿体组装
+2.1 #四倍体海大麦组装
+cd /media/langchao/SQF/GH/GenomeAssembly/G4_SB58/ChloroplastGenome
+ln -s /media/langchao/SQF/GH/GenomeAssembly/G4_SB58/G4_SB58_ILLUMINAdata/G4_SB58_L1_R1.fq.gz ./
+ln -s /media/langchao/SQF/GH/GenomeAssembly/G4_SB58/G4_SB58_ILLUMINAdata/G4_SB58_L1_R2.fq.gz ./
+ln -s /media/langchao/SQF/GH/GenomeAssembly/G4_SB58/G4_SB58_ILLUMINAdata/G4_SB58_L2_R1.fq.gz ./
+ln -s /media/langchao/SQF/GH/GenomeAssembly/G4_SB58/G4_SB58_ILLUMINAdata/G4_SB58_L2_R2.fq.gz ./
+
+cat G4_SB58_L1_R1.fq.gz G4_SB58_L2_R1.fq.gz > G4_SB58_R1.fq.gz
+cat G4_SB58_L1_R2.fq.gz G4_SB58_L2_R2.fq.gz > G4_SB58_R2.fq.gz
+
+get_organelle_from_reads.py \
+    -1 G4_SB58_R1.fq.gz \
+    -2 G4_SB58_R2.fq.gz \
+    -o G4_SB58_cp_assembly \
+    -s Hvul_NC_008590.1.fna \
+    -F embplant_pt \
+    -R 15 \
+    -k 21,45,65,85,105 \
+    -t 16
+
+2.2 #G物种二倍体海大麦组装
+cd /media/langchao/SQF/GH/GenomeAssembly/G2_SB34/G2_SB34_iLLUMINA
+ln -s /media/langchao/SQF/GH/GenomeAssembly/G4_SB58/ChloroplastGenome/Hvul_NC_008590.1.fna ./
+
+get_organelle_from_reads.py \
+    -1 G2_SB34_R1_merged.fq.gz \
+    -2 G2_SB34_R2_merged.fq.gz \
+    -o G2_SB34_cp_assembly \
+    -s Hvul_NC_008590.1.fna \
+    -F embplant_pt \
+    -R 15 \
+    -k 21,45,65,85,105 \
+    -t 16
+
+2.3 #M物种二倍体海大麦谱系2组装
+cd /media/langchao/SQF/GH/GenomeAssembly/M2_SB2/M2_SB2_IlluminaData
+ln -s /media/langchao/SQF/GH/GenomeAssembly/G4_SB58/ChloroplastGenome/Hvul_NC_008590.1.fna ./
+cat M2_SB2_L1_1.fq.gz M2_SB2_L2_1.fq.gz > M2_SB2_R1.fq.gz
+cat M2_SB2_L1_2.fq.gz M2_SB2_L2_2.fq.gz > M2_SB2_R2.fq.gz
+
+get_organelle_from_reads.py \
+    -1 M2_SB2_R1.fq.gz \
+    -2 M2_SB2_R2.fq.gz \
+    -o M2_SB2_cp_assembly \
+    -s Hvul_NC_008590.1.fna \
+    -F embplant_pt \
+    -R 15 \
+    -k 21,45,65,85,105 \
+    -t 16
+
+2.4 #M物种二倍体海大麦谱系1组装
+cd /media/langchao/SQF/GH/GenomeAssembly/M2_SB14/M2_SB14_IlluminaData
+ln -s /media/langchao/SQF/GH/GenomeAssembly/G4_SB58/ChloroplastGenome/Hvul_NC_008590.1.fna ./
+cat M2_SB14_L1_1.fq.gz M2_SB14_L2_1.fq.gz > M2_SB14_R1.fq.gz
+cat M2_SB14_L1_2.fq.gz M2_SB14_L2_2.fq.gz > M2_SB14_R2.fq.gz
+
+get_organelle_from_reads.py \
+    -1 M2_SB14_R1.fq.gz \
+    -2 M2_SB14_R2.fq.gz \
+    -o M2_SB14_cp_assembly \
+    -s Hvul_NC_008590.1.fna \
+    -F embplant_pt \
+    -R 15 \
+    -k 21,45,65,85,105 \
+    -t 16
+
+3.下载Bandage (v0.8.1) 进行手动组装与调整
+
+4.利用cpstools标准化叶绿体基因组
+4.1 #conda环境配置 (trimal v1.5.1; iqtree v3.1.2; gawk v5.4.0; mafft v7.525)
+conda create -n cpgtools_env python=3.9 -y
+conda activate cpgtools_env
+conda install -c bioconda -c conda-forge \
+    blast \
+    seqkit \
+    biopython \
+    mafft \
+    trimal \
+    iqtree \
+    entrez-direct \
+    -y
+conda install bioconda::cpstools #cpstools-3.0
+
+4.2 #建立大麦参考基因组 BLAST 数据库
+cd /media/langchao/SQF/GH/GenomeAssembly/ChloroplastGenome/00_raw_fasta
+
+for f in *.fasta; do mv "$f" "${f%%.*}.fasta" 2>/dev/null; done #重命名去掉可能的额外后缀（如 .cp.fasta → .fasta）
+cd ..
+makeblastdb -in 00_raw_fasta/Hvul_NC_008590.1.fasta -dbtype nucl -out ref_db 
+
+4.3 #创建脚本orient_chloroplast.sh
+#!/bin/bash
+set -e  # 遇到任何错误立即停止执行
+
+
+# 1. 目录与文件定义（请根据你服务器的实际命名调整参考基因组文件名）
+RAW_DIR="00_raw_fasta"
+CORRECTED_DIR="01_corrected_fasta"
+REF_FASTA="${RAW_DIR}/Hvul_NC_008590.1.fasta" # 大麦参考序列
+DB_PREFIX="ref_db"
+
+# 明确指定你需要处理的四个海大麦自组装样本名（不带 .fasta 后缀）
+SAMPLES=("N4_SB58" "G2_SB34" "M2_SB2" "M2_SB14")
+
+# 创建输出目录
+mkdir -p "${CORRECTED_DIR}"
+
+echo " 流程开始：准备进行多倍体海大麦叶绿体基因组全局方向校正"
+
+# 预检查参考基因组
+if [ ! -f "${REF_FASTA}" ]; then
+    echo "【错误】未在 ${RAW_DIR}/ 目录下找到参考基因组文件：${REF_FASTA}"
+    echo "请检查命名或放置好文件后重新运行脚本！"
+    exit 1
+fi
+
+# 2. 循环处理四个海大麦样本
+for sample in "${SAMPLES[@]}"; do
+    QUERY_FILE="${RAW_DIR}/${sample}.fasta"
+    OUTPUT_FILE="${CORRECTED_DIR}/${sample}.fasta"
+    
+    # 检查样本文件是否存在
+    if [ ! -f "${QUERY_FILE}" ]; then
+        echo "【警告】未找到样本文件 ${QUERY_FILE}，自动跳过此样本。"
+        echo "-----------------------------------------------------------------"
+        continue
+    fi
+    
+    echo "正在分析样本: ${sample} ..."
+    
+    # 【顶刊优化点】：去掉 -max_hsps 1，改用 -max_target_seqs 1
+    # 允许 LSC, SSC, IRs 全局所有片段输出，通过 awk 进行全基因组碱基数投票
+    
+    # 计算反向互补（REV）的累计比对长度
+    REV=$(blastn -query "${QUERY_FILE}" -db "${DB_PREFIX}" -outfmt "6 sstart send" -max_target_seqs 1 | \
+          awk '{if($1>$2) rev+=$1-$2} END{print rev+0}')
+          
+    # 计算正向（FWD）的累计比对长度
+    FWD=$(blastn -query "${QUERY_FILE}" -db "${DB_PREFIX}" -outfmt "6 sstart send" -max_target_seqs 1 | \
+          awk '{if($1<=$2) fwd+=$2-$1} END{print fwd+0}')
+    
+    echo "   -> 全局投票统计：正向得分 (FWD) = ${FWD} bp | 反向得分 (REV) = ${REV} bp"
+    
+    # 比较正反向总碱基得分，决定是否取反
+    if [ "${REV}" -gt "${FWD}" ]; then
+        echo "   [判定结果]: 该序列整体属于【反向链】。"
+        echo "   [执行动作]: 正在调用 seqkit 进行高保真反向互补校正..."
+        seqkit seq -r -p "${QUERY_FILE}" > "${OUTPUT_FILE}"
+        echo "   >> 校正完成，成功保存至: ${OUTPUT_FILE}"
+    else
+        echo "   [判定结果]: 该序列整体属于【正向链】。"
+        echo "   [执行动作]: 无需反转，直接复制原始序列..."
+        cp "${QUERY_FILE}" "${OUTPUT_FILE}"
+        echo "   >> 复制完成，成功保存至: ${OUTPUT_FILE}"
+    fi
+    echo "-----------------------------------------------------------------"
+done
+
+# 3. 后期清理
+rm -f ${DB_PREFIX}.n*
+echo " 恭喜！四个海大麦样本的方向判断与校正全部完成！"
+echo " 统一后的正向序列均已规范存放在: ${CORRECTED_DIR}/ 目录中。"
+
+4.4 #识别四分体边界并动态构建 info.txt
+echo -e "ID\tLSC_start\tLSC_end\tIRb_start\tIRb_end\tSSC_start\tSSC_end\tIRa_start\tIRa_end" > info.txt
+
+for f in 01_corrected_fasta/*.fasta; do
+    cpstools IR -i "$f" >> info.txt
+done
+
+4.5 #调用 CPStools 进行起点对齐与 SSC 调整
+cpstools Seq -d 01_corrected_fasta -f info.txt -m LSC #强行将全部序列物理起点平移至 LSC 的第一个碱基
+cpstools Seq -d LSC_adj -f info.txt -m SSC #强行矫正所有序列的 SSC 区域为标准正向
+
+for f in SSC_adj/*.fasta; do
+    cpstools IR -i "$f" >> infoMod.txt
+done
+
+5.利用CPGAVAS2对高保真基因组注释与人工校准（脱机操作）获取.gb 文件
+
+6.提取超级矩阵并构建最终进化树
+6.1 #一键提取共有编码基因 (CDS)
+cpstools phy -d 03_annotated_gb -m cds
+cd /media/langchao/SQF/GH/GenomeAssembly/ChloroplastGenome/03_annotated_gb/cds
+
+6.2 #高精度多序列比对 (MAFFT)
+mafft --auto merge_cds.fasta > aligned_cds.fasta
+
+6.3 #序列修剪去噪 (trimAl)
+trimal -in aligned_cds.fasta -out trimmed_cds.fasta -automated1
+
+6.4 #构建最大似然树
+iqtree -s trimmed_cds.fasta -m MFP -bb 1000 -alrt 1000 -nt 20
+
+7.将.treefile文件输入ITOL v7进行可视化
+
+
+
+
