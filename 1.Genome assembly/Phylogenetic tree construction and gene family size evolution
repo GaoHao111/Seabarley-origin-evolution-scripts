@@ -1,0 +1,189 @@
+0.环境配置与文件准备
+0.1 #环境配置
+conda create -n orthofinder
+conda activate orthofinder
+conda install -c bioconda orthofinder #orthofinder-3.1.0
+conda install -c bioconda mafft #mafft-7.525
+conda install -c bioconda gblocks #gblocks-0.91b
+conda install -c bioconda seqkit #seqkit-2.10.1
+conda install -c bioconda modeltest-ng #modeltest-ng-0.1.7
+conda install -c bioconda iqtree
+conda install -c bioconda trimal #trimal-1.5.0
+conda install aster #ASTRAL-IV(v1.23.4.6)
+conda install -c bioconda -c conda-forge python=3.9 biopython #biopython-1.85
+conda install -c bioconda paml #paml-4.10.9
+
+0.2 #文件准备
+cd /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pep
+ln -s /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pepDatabase/Hmar.pro.fa
+ln -s /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pepDatabase/Hgus.pro.fa
+ln -s /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pepDatabase/Hnot_Xam.pro.fa
+ln -s /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pepDatabase/Hnot_Xag.pro.fa
+ln -s /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pepDatabase/Hvul.pro.fa
+ln -s /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pepDatabase/Osat.pro.fa
+ln -s /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pepDatabase/Zmay.pro.fa
+ln -s /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pepDatabase/Plat.pro.fa
+ln -s /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pepDatabase/Olat.pro.fa
+ln -s /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pepDatabase/Otho.pro.fa
+ln -s /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pepDatabase/Acom.pro.fa
+
+0.3 #文件格式整理
+0.3.1 #简化头部信息，只保留第一个字节
+sed -i 's/^>\([^ ]*\).*/>\1/' Acom.pro.fa 
+
+0.3.2 #创建脚本移除所有序列行中的点号
+# 进入您的蛋白序列目录
+cd pep
+
+# 使用sed命令移除所有序列行中的点号(.)
+for file in *.fa *.fasta; do
+    # 备份原文件（可选）
+    cp "$file" "${file}.bak"
+    
+    # 移除序列行中的点号，但保留标题行不变
+    sed -i '/^[^>]/s/\.//g' "$file"
+    
+    echo "已清理文件: $file"
+done
+
+1.单拷贝同源基因查找
+cd /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree
+orthofinder -f pep/ -t 20
+
+2.基于单拷贝同源基因构建物种进化树
+2.1 #串联法
+2.1.1 #提取每个基因的保守序列
+创建脚本ConservedRegionExtraction.sh
+for i in *.fa
+do
+    file=${i%.fa*}
+    echo "Processing $file..."
+    
+    # 多序列比对
+    mafft --maxiterate 1000 --localpair "${file}.fa" > "${file}.aln"
+    
+    # 提取保守序列
+    Gblocks "${file}.aln" -b4=5 -b5=h -t=p -e=.gb
+    
+    # 多行序列转为单行
+    seqkit seq "${file}.aln.gb" -w 0 > "${file}.new.aln"
+    
+    # 使用映射文件替换序列ID
+    awk '
+    BEGIN {
+        # 读取物种映射文件
+        idx = 1
+        while ((getline line < "species_mapping.txt") > 0) {
+            species[idx++] = line
+        }
+        close("species_mapping.txt")
+        current_species = 1
+    }
+    {
+        if (NR%2 == 1) {
+            # 奇数行：序列ID行，替换为映射的物种名
+            print ">" species[current_species++]
+        } else {
+            # 偶数行：序列行，原样输出
+            print $0
+        }
+    }' "${file}.new.aln" > "${file}.final.aln"
+    
+    echo "Completed $file"
+done
+
+2.1.2 #基因保守序列整合
+seqkit concat *.final.aln > all11Genomes.fa
+sed -i "s/\ //g" all11Genomes.fa
+
+2.1.3 #最佳模型选择
+modeltest-ng -i all11Genomes.fa -d aa -o all11GenomesBestModel -p 16
+
+2.1.4 #构建物种进化树
+iqtree -s all11Genomes.fa -m JTT+I+G4+F -bb 1000 -alrt 1000 -nt 16
+
+2.2 #并联法
+2.2.1 #单拷贝基因文件准备
+cd /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pep/OrthoFinder/Results_Oct30
+mkdir GeneTrees && cd GeneTrees
+cp /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pep/OrthoFinder/Results_Oct30/Single_Copy_Orthologue_Sequences/*.fa . #最后一个点指的是当前目录
+
+2.2.2 #利用mafft多序列比对
+for gene in *.fa; do
+    mafft --quiet --maxiterate 1000 --localpair "$gene" > "${gene%.fa}.aln"
+done
+
+2.2.3 #使用trimAL修剪低质量区域
+for aln in *.aln; do
+    trimal -in "$aln" -out "${aln%.aln}.trimmed" -automated1
+done
+
+2.2.4 #使用IQ-TREE构建最大似然基因树
+for trimmed in *.trimmed; do
+    iqtree -s "$trimmed" -m MFP -bb 1000 -alrt 1000 -nt 20 -pre "${trimmed%.trimmed}"
+done
+
+2.2.5 #收集所有基因树文件
+cd ..
+mkdir ASTRAL && cd ASTRAL
+cat ../GeneTrees/*.treefile > all_genetrees.tre
+echo "基因树数量: $(wc -l < genetrees.list)"
+
+2.2.6 #运行ASTRAL构建物种树
+astral4 -t 16 -R -i all_genetrees_species_only.tre -o species_tree.tre 2> aster.log
+
+3.利用mcmctree估计物种分歧时间
+3.1 #前期文件配置
+创建python脚本fasta_to_paml_phy.py，将all11Genomes.fa文件转换为all11Genomes_paml.phy
+cd /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pep/OrthoFinder/Results_Oct30
+mkdir MCMCtree && cd MCMCtree
+ln -s /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pep/OrthoFinder/Results_Oct30/Single_Copy_Orthologue_Sequences/all11Genomes_paml.phy
+
+3.2 #代码运行
+3.2.1 #第一次运行usedata=3
+mcmctree mcmctree.ctl
+
+3.2.2 #第二次运行(out.BV更改为in.BV,更改配置文件usedata=2)
+cp out.BV /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pep/OrthoFinder/Results_Oct30/MCMCtree2/in.BV
+cp mcmctree.ctl /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pep/OrthoFinder/Results_Oct30/MCMCtree2/mcmctree.ctl
+cd /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pep/OrthoFinder/Results_Oct30/MCMCtree2
+ln -s /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pep/OrthoFinder/Results_Oct30/MCMCtree/all11Genomes_paml.phy
+ln -s /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pep/OrthoFinder/Results_Oct30/MCMCtree/Biaoding.trees
+mcmctree mcmctree.ctl 
+
+3.2.3 #第三次运行(out.BV更改为in.BV,更改配置文件usedata=2)
+cp out.BV /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pep/OrthoFinder/Results_Oct30/MCMCtree3/in.BV
+cp mcmctree.ctl /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pep/OrthoFinder/Results_Oct30/MCMCtree3/mcmctree.ctl
+cd /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pep/OrthoFinder/Results_Oct30/MCMCtree3
+ln -s /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pep/OrthoFinder/Results_Oct30/MCMCtree/all11Genomes_paml.phy
+ln -s /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pep/OrthoFinder/Results_Oct30/MCMCtree/Biaoding.trees
+mcmctree mcmctree.ctl 
+
+4.利用FigTree v1.4.5 pre-release可视化结果
+
+5.基因家族的扩张与收缩分析
+5.1 #环境配置
+conda install -c bioconda cafe #cafe-5.1.0
+cafe5 -h
+
+5.2 #文件准备
+cd /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/GeneFamily
+ln -s /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pep/OrthoFinder/Results_Oct30/Orthogroups/Orthogroups.GeneCount.tsv
+awk -v OFS="\t" '{$NF=null;print $1,$0}' Orthogroups.GeneCount.tsv |sed -E -e 's/Orthogroup/desc/' -e 's/_[^\t]+//g' >gene_families.txt #用orthofinder2的结果文件Orthogroups.GeneCount.tsv转换成gene_families.txt文件(第一行的物种名字与进化树的一致)
+awk 'NR==1 || $3<100 && $4<100 && $5<100 && $6<100 && $7<100 && $8<100 && $9<100 && $10<100 && $11<100 && $12<100 && $13<100 {print $0}' gene_families.txt >gene_families_filter.txt #筛除3-13列中基因家族数量大于等于100的行
+grep -E -v "NEXUS|BEGIN|END" FigTree.tre|sed -E -e "s/\[[^]]*\]//g" -e "s/[ \t]//g" -e "/^$/d" -e "s/UTREE/tree tree/" >tree.txt #用paml的Figtree转换成tree.txt文件(newick格式)
+ln -s /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pep/OrthoFinder/Results_Oct30/MCMCtree2/FigTree.tre
+grep  "UTREE 1 =" FigTree.tre | sed -E -e "s/\[[^]]*\]//g" -e "s/[ \t]//g" -e "/^$/d" -e "s/UTREE1=//" > tree.txt 
+根据tre文件修改前面gene_families_filter.txt文件物种名
+MCMCTree进行时间推断时设置的分化时间是以100个MYA为单位的，而在输入到CAFE中的时间分化树需要改为以MYA为单位。要扩大100倍，故tree.txt手动修改为modified_tree.txt
+
+5.3 #代码运行
+cafe5 -i gene_families_filter.txt -t modified_tree.txt -p -k 2 -o k2p
+
+cd /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/GeneFamily/k5p
+cat Gamma_family_results.txt | grep "y" | cut -f 1 > p0.05.significant
+head -n 1 Gamma_change.tab > Gamma_p0.05change.tab 
+tail -n +2 Gamma_change.tab | grep -f p0.05.significant >> Gamma_p0.05change.tab 
+
+ln -s /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pep/OrthoFinder/Results_Oct30/Orthogroups/Orthogroups.txt
+awk 'NR>1 && ($3>0 || $5>0) {print $1}' Gamma_p0.05change.tab | sort -u > selected_OGs.txt
