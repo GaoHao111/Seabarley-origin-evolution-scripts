@@ -1,0 +1,60 @@
+0.运行前文件准备
+cd /home/data/SQF/GH/WholeGenomeSequencing/57Samples_Seabarley
+ln -s /home/data/SQF/GH/WholeGenomeSequencing/WildBarley_FromDaifei/WildBarley_Basalt99.snp.filtered.vcf.gz
+ln -s /home/data/SQF/GH/WholeGenomeSequencing/WildBarley_FromDaifei/WildBarley_Basalt99.snp.filtered.vcf.gz.csi
+ln -s /home/data/SQF/GH/WholeGenomeSequencing/78Samples_SeaBarley/78SeaBarleyoo.snp.vcf.gz
+bcftools view -S selected_samples.txt 78SeaBarleyoo.snp.vcf.gz -Oz -o 57SeaBarleyoo.snp.vcf.gz
+bcftools index 57SeaBarleyoo.snp.vcf.gz
+bcftools merge -Oz -o 57SBand1WB.snp.vcf.gz ./WildBarley_Basalt99.snp.filtered.vcf.gz ./57SeaBarleyoo.snp.vcf.gz
+ln -s /home/data/SQF/GH/WholeGenomeSequencing/78Samples_SeaBarley/78SeaBarley_Delete3Samples/chrom-map.txt
+bcftools annotate --rename-chrs ./chrom-map.txt ./57SBand1WB.snp.vcf.gz | bgzip -c > ./57SBand1WBRenamed.snp.vcf.gz 
+
+1.vcf文件过滤与质控
+1.1 #利用vcftools进行maxmissing排除存在样本缺失的snp位点并利用plink进行基本质控
+vcftools --gzvcf 57SBand1WBRenamed.snp.vcf.gz --max-missing 1 --recode --stdout | gzip > 57SBand1WBRenamed.SnpMaxMissing1.vcf.gz #保证每个snp不能在样本中存在缺失
+/home/data/SQF/GH/SoftwareInstallation/plink1.9/plink --vcf 57SBand1WBRenamed.SnpMaxMissing1.vcf.gz --allow-extra-chr --make-bed --threads 32 --out ./BedFile/57SBand1WBRenamed.SnpMaxMissing1.Formatteddata
+/home/data/SQF/GH/SoftwareInstallation/plink1.9/plink --bfile ./BedFile/57SBand1WBRenamed.SnpMaxMissing1.Formatteddata --geno 0.05  --maf 0.05 --hwe 1e-6 --threads 32 --make-bed --allow-extra-chr --out ./QcFile/57SBand1WBRenamed.SnpMaxMissing1.QCdata
+
+1.2 #将质控后的二进制文件转为vcf文件
+/home/data/SQF/GH/SoftwareInstallation/plink1.9/plink --bfile ./QcFile/57SBand1WBRenamed.SnpMaxMissing1.QCdata --export vcf --out 57SBand1WBRenamed.SnpMaxMissing1.QCdata --allow-extra-chr  #将二进制bed,bim,fam文件转换为新的vcf文件
+bgzip -@ 32 57SBand1WBRenamed.SnpMaxMissing1.QCdata.vcf
+
+1.3 #将vcf文件转为map,ped文件进行LD剪枝
+/home/data/SQF/GH/SoftwareInstallation/plink1.9/plink --allow-extra-chr --vcf 57SBand1WBRenamed.SnpMaxMissing1.QCdata.vcf.gz --recode ped --out ./PedFile/PrepareLd   #LD修剪前需转换为二进制
+cd PedFile
+awk '{print $1"\t"$1"_"$4"\t"$3"\t"$4}' PrepareLd.map >PrepareLd1.map
+mv PrepareLd.ped PrepareLd1.ped
+/home/data/SQF/GH/SoftwareInstallation/plink1.9/plink --file PrepareLd1 --indep-pairwise 100 10 0.4 --out 57SBand1WBRenamed.MaxMissing1.QC.LdPruned --allow-extra-chr --keep-allele-order --threads 32
+/home/data/SQF/GH/SoftwareInstallation/plink1.9/plink --file PrepareLd1 --extract 57SBand1WBRenamed.MaxMissing1.QC.LdPruned.prune.in --make-bed --out 57SBand1WBRenamed.MaxMissing1.QC.LdPruned.Final --keep-allele-order --allow-extra-chr --threads 32
+/home/data/SQF/GH/SoftwareInstallation/plink1.9/plink --bfile 57SBand1WBRenamed.MaxMissing1.QC.LdPruned.Final --export vcf --out 57SBand1WBRenamed.MaxMissing1.QC.LdPruned.Final --allow-extra-chr 
+
+2.TreeMix的输入文件准备
+2.1 #格式转换
+vcftools --vcf ./PedFile/57SBand1WBRenamed.MaxMissing1.QC.LdPruned.Final.vcf --plink-tped --out ./TpedFile/58MergeBest.snp   #将vcf文件格式转换为treemix能识别的tped格式 （若出现报错，不能识别染色体名称故进行以上“可选”修改）
+手动修改tfam文件第一列和最后一列（第一列修改为群体信息，最后全部改为-9）
+cd TpedFile
+cat 58MergeBest.snp.tfam |awk '{print $1"\t"$2"\t"$1}' >sample.pop.cov #提取文件sample.pop.cov，格式为：共三列，前两列与修改后的16MergeNomis.snp.tfam前两列一样，为群体ID和样本ID，第三列和第一列一致，tab分隔
+
+2.2 #等位基因频率计算并转换为treemix所需格式
+/home/data/SQF/GH/SoftwareInstallation/plink1.9/plink --tfile 58MergeBest.snp --freq  --within sample.pop.cov --allow-extra-chr #计算等位基因频率
+gzip plink.frq.strat   #压缩文件
+ln -s /home/data/SQF/GH/WholeGenomeSequencing/75SeaBarleyand1WildBarley/Treemix/plink2treemix.py
+python2 plink2treemix.py plink.frq.strat.gz treemix.frq.gz
+
+3.conda环境配置
+conda create -n treemix
+conda activate treemix
+conda install treemix #treemix-1.13
+
+4.TreeMix运行
+运行代码脚本treemix.sh
+#设置k=500
+for m in {0..3}
+    do
+    for i in {1..5}
+        do
+        treemix -i ./TpedFile/treemix.frq.gz -m $m -root WildBarley -k 500 -se -bootstrap -global -noss -o ./TreemixResults_k500/Out.Mig${m}.Rep${i}
+    done
+done
+
+nohup bash treemix.sh &
