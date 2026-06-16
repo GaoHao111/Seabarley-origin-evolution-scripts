@@ -58,3 +58,45 @@ for m in {0..3}
 done
 
 nohup bash treemix.sh &
+
+5.迁移边与残差图绘制
+5.1 #环境准备与工作目录设置
+library(OptM)
+library(RColorBrewer)
+library(R.utils)
+#设置工作目录
+setwd("D:/ProfileAdress/TreemixResultsK500_MajorRevision")
+#加载官方绘图脚本
+source("plotting_funcs.R")
+
+5.2 #绘制 10 宫格拼图 (第一行树，第二行残差)
+#开启高质量PDF引擎
+pdf("TreeMix_m2_All_5_Replicates_Combined.pdf", width = 25, height = 10)
+
+#设置布局：2行5列
+#mar: 控制单张图的边距 (下, 左, 上, 右)
+#oma: 控制整张大图的外边距
+par(mfrow = c(2, 5), mar = c(4, 4, 4, 1), oma = c(1, 1, 2, 1))
+
+#第一行：依次绘制 Rep 1-5 的进化树 ---
+for(rep in 1:5){
+  stem_name <- paste0("Out.Mig2.Rep", rep)
+  plot_tree(stem_name, cex = 1.0)
+  title(main = paste0("TreeMix Graph\n(m = 2, Rep ", rep, ")"), cex.main = 1.3)
+}
+
+#第二行：依次绘制 Rep 1-5 的残差图 ---
+for(rep in 1:5){
+  stem_name <- paste0("Out.Mig2.Rep", rep)
+  plot_resid(stem_name, "order.list")
+  title(main = paste0("Residual Matrix\n(m = 2, Rep ", rep, ")"), cex.main = 1.3)
+}
+
+#添加整张大图的总标题
+mtext("Robustness Assessment Across 5 Independent TreeMix Runs (m = 2)", 
+      side = 3, outer = TRUE, cex = 1.6, font = 2)
+
+#关闭画板并保存
+dev.off()
+
+print("【成功】所有 5 个重复的对比大图已保存在：TreeMix_m2_All_5_Replicates_Combined.pdf")
