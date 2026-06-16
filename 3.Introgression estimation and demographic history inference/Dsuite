@@ -1,0 +1,31 @@
+0.安装Dsuite主程序
+git clone https://github.com/millanek/Dsuite.git(clone不了就手动下载Dsuite-master.zip)
+unzip Dsuite-master.zip
+cd Dsuite-master
+make
+export PATH=/home/data/SQF/GH/SoftwareInstallation/Dsuite-master/Build:$PATH
+export PATH=/home/data/SQF/GH/SoftwareInstallation/Dsuite-master/utils:$PATH
+
+1.代码运行
+1.1 #Dsuite Dtrios基础代码运行
+cd /home/data/SQF/GH/WholeGenomeSequencing/75SeaBarleyand1WildBarley/Dsuite
+ln -s /home/data/SQF/GH/WholeGenomeSequencing/75SeaBarleyand1WildBarley/75SBand1WBQc.vcf.gz
+Dsuite Dtrios -o 57Samples 75SBand1WBQc.vcf.gz SETS.txt 
+
+1.2 #利用ruby根据Dsuite Dtrios结果绘制热图
+conda create -n ruby
+conda activate ruby
+conda install -c conda-forge ruby
+ruby plot_d.rb 57Samples_BBAA.txt plot_order.txt 0.7 57Samples_BBAA_D.svg
+ruby plot_f4ratio.rb 57Samples_BBAA.txt plot_order.txt 0.2 57Samples_BBAA_f4ratio.svg 
+
+1.3 #利用Dsuite Dinvestigate对Dtrios结果进行基因组热点区域筛选
+Dsuite Dinvestigate -w 500,100 75SBand1WBQc.vcf.gz SETS.txt test_trios.txt #其中500 100是窗口和步长
+
+1.4 #添加nwk参数再跑Dsuite Dtrios
+Dsuite Dtrios -o 57SamplesWithTree -t SeabarleyTreefile.nwk 75SBand1WBQc.vcf.gz SETS.txt #这里的SeabarleyTreefile.nwk来自于vcf2dis分析群体分类树时得到的树文件75sband1wb_p_dis_mat_fastme-tree.nwk
+
+1.5 #利用Dsuite Fbranch分析物种复杂且具体的基因流
+这里需要用到nwk文件，但是上面用的SeabarleyTreefile.nwk在这里会报错，故将上述nwk文件导入Phylo.io - Phylogenetic tree viewer软件，修剪掉G4亚种导出nwk文件SeabarleyTreefile_TrimG4.nwk
+Dsuite Fbranch SeabarleyTreefile_TrimG4.nwk 57SamplesWithTree_tree.txt > 57Samples_Fbranch.txt
+dtools.py 57Samples_Fbranch.txt SeabarleyTreefile_TrimG4.nwk --outgroup WildBarley --use_distances --dpi 1200 --tree-label-size 30
