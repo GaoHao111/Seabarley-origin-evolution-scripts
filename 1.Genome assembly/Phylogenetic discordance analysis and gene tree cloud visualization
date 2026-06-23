@@ -1,0 +1,167 @@
+0.conda环境配置与文件准备
+conda create -n gotree
+conda activate gotree
+conda install -c bioconda gotree #gotree v0.5.1
+
+cd /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/SubgenomeDominance/TopologicalStructure
+cp /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pep/OrthoFinder/Results_Oct30/ASTRAL/all_genetrees_species_only.tre ./
+cp /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pep/OrthoFinder/Results_Oct30/ASTRAL/species_tree.tre ./
+
+1.利用gotree对物种树进行外群定根
+echo "Acomosus" > outgroup.txt #创建外群物种文件
+gotree reroot outgroup -i species_tree.tre -o Astralspecies_Rooted.tre --tip-file outgroup.txt 
+gotree stats -i Astralspecies_Rooted.tre | grep "rooted"
+
+2.创建脚本UFBootExtract.sh从基因树中提取 UFBoot 支持值
+# 生成只包含 UFBoot 支持度的树文件
+> all_trees_ufboot.tre
+while IFS= read -r tree; do
+    # 将 "数字/数字:" 替换为 "第二个数字:"（UFBoot）
+    echo "$tree" | sed -E 's/[0-9.]+(\/[0-9.]+(:))/\1/g; s/\///g' >> all_trees_ufboot.tre
+done < all_genetrees_species_only.tre
+
+3.创建脚本GoTreeCollapse.sh过滤低支持度分支(bootstrap < 50%)
+mkdir -p phyparts_input
+> phyparts_input/filtered_trees.tre
+while IFS= read -r tree; do
+    echo "$tree" > tmp.nwk
+    gotree collapse support -i tmp.nwk -s 50 -o tmp_filtered.nwk
+    cat tmp_filtered.nwk >> phyparts_input/filtered_trees.tre
+done < all_trees_ufboot.tre
+rm tmp.nwk tmp_filtered.nwk
+
+4.利用 phyparts 分析基因树与物种树的冲突模式
+4.1 #环境配置
+conda create -n phyparts
+conda activate phyparts
+conda install conda-forge::maven #maven-3.9.12
+conda install python=3.9
+conda install matplotlib numpy pandas
+conda install -c etetoolkit ete3
+
+4.2 #phyparts软件安装
+cd /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/SoftwareInstallation
+git clone https://bitbucket.org/blackrim/phyparts.git #phyparts v0.0.1
+cd phyparts
+./mvn_cmdline.sh
+
+4.3 #软件运行前文件准备
+cd media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/SubgenomeDominance/TopologicalStructure
+mkdir -p gene_trees_split
+split -l 1 phyparts_input/filtered_trees.tre gene_trees_split/tree_ --numeric-suffixes=1 --suffix-length=4
+cd gene_trees_split
+for f in tree_*; do mv "$f" "$f.tre"; done #添加.tre后缀
+cd ..
+
+4.4 #软件运行
+java -jar /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/SoftwareInstallation/phyparts/target/phyparts-0.0.1-SNAPSHOT-jar-with-dependencies.jar -a 1 -v -d gene_trees_split/ -m Astralspecies_Rooted.tre -o phyparts_out
+git clone https://github.com/mossmatters/phyloscripts.git
+python ./phyloscripts/phypartspiecharts/phypartspiecharts.py -h
+QT_QPA_PLATFORM=offscreen python ./phyloscripts/phypartspiecharts/phypartspiecharts.py Astralspecies_Rooted.tre phyparts_out 491 --to_csv --no_ladderize --svg_name pies.svg
+
+5.利用toytree和toyplot可视化
+conda create -n CloudTreeDrawing
+conda activate CloudTreeDrawing
+conda install toytree toyplot numpy python=3.9 #toytree v3.0.1; toyplot v2.0.0
+conda install matplotlib
+
+创建云图绘制脚本plot_cloud.py
+python plot_cloud.py
+
+#脚本如下：
+import toytree
+import toyplot
+import toyplot.pdf
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+
+# 1. 加载数据与理顺拓扑
+stree_raw = "((Platifolius:0.252132,(((((((Hgussoneanum:0.00122382,HnothoanatolicumXag:0.00103056)1:0.00746668,Hmarinum:0.00740034)0.967165:0.000440549,HnothoanatolicumXam:0.00727099)1:0.0140955,Hvulgare:0.00140237)1:0.142884,Olatifolia:0.102658)0.901039:0.00866091,Osativa:0.124959)1:0.00797084,(Zmay:0.109544,Othomaeum:0.122826)1:0.0462065)1:0.0583186):0.288793,Acomosus:0.288793);"
+
+# 重根并阶梯化 (ladderize)
+stree = toytree.tree(stree_raw).root("Acomosus").mod.ladderize()
+
+# 获取叶节点顺序，并强制将 Acomosus 放在列表最前面（即绘图时的最底部）
+tip_order = stree.get_tip_labels()
+if tip_order.index("Acomosus") != 0:
+    tip_order = tip_order[::-1]
+
+mtrees_raw = toytree.mtree("all_trees_ufboot.tre")
+temp_trees = []
+rf_distances = []
+
+print("正在解析并处理全部 491 棵基因树...")
+for gt in mtrees_raw:
+    gt = gt.root("Acomosus")
+    gt = gt.mod.collapse_nodes(min_support=50)
+    dist = toytree.distance.get_treedist_rf(stree, gt)
+    rf_distances.append(dist)
+    temp_trees.append(gt)
+
+# 不再进行任何剔除操作，保留完整的 491 棵树
+rf_min, rf_max = min(rf_distances), max(rf_distances)
+
+print(f"数据处理完成：共保留 {len(temp_trees)} 棵基因树用于绘制云图。")
+
+# 2. 定制高级红蓝渐变 (Sapphire to Crimson)
+custom_colors = ["#08519c", "#e0e0e0", "#a50f15"] 
+cmap_custom = mcolors.LinearSegmentedColormap.from_list("SapphireCrimson", custom_colors)
+norm = mcolors.Normalize(vmin=rf_min, vmax=rf_max)
+
+# 3. 绘图：缩减宽度的等距展开 DensiTree
+# 将宽度由 1600 缩小为 800，高度设为 800 形成 1:1 的紧凑比例
+canvas = toyplot.Canvas(width=800, height=800)
+axes = canvas.cartesian(label=f"Topological Cloud Tree ({len(temp_trees)} Genes, Colored by RF)")
+
+print("正在绘制云图并修复拓扑排列...")
+for gt, d in zip(temp_trees, rf_distances):
+    hex_color = mcolors.to_hex(cmap_custom(norm(d)))
+    
+    gt.draw(
+        axes=axes,
+        fixed_order=tip_order,
+        edge_type='c', 
+        use_edge_lengths=False, # 依然保持强制展开，呈现最佳内部结构
+        edge_style={
+            "stroke": hex_color, 
+            "stroke-opacity": 0.08, # 由于 491 棵树全部堆叠，透明度维持 0.08
+            "stroke-width": 1.2
+        },
+        tip_labels=False
+    )
+
+# 绘制黑色的物种树骨架
+stree.draw(
+    axes=axes,
+    fixed_order=tip_order,
+    edge_type='c', 
+    use_edge_lengths=False, 
+    edge_style={
+        "stroke": "#111111", 
+        "stroke-width": 3.5, # 维持纤细精致的黑色实线
+        "stroke-opacity": 1.0
+    },
+    tip_labels=True,
+    tip_labels_style={
+        "font-size": "15px", 
+        "font-weight": "bold", 
+        "fill": "#000"
+    }
+)
+
+# 保存主图
+toyplot.pdf.render(canvas, "Species_Gene_DensiTree_Compact.pdf")
+print("--> 主图已保存: Species_Gene_DensiTree_Compact.pdf")
+
+# 4. 生成图例
+fig, ax = plt.subplots(figsize=(1.2, 5)) 
+cbar = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap_custom), cax=ax)
+cbar.set_label("Absolute Robinson-Foulds Distance", fontsize=12, fontweight='bold')
+ax.tick_params(labelsize=11)
+
+fig.savefig("Colorbar_RedBlue_Legend.pdf", format="pdf", bbox_inches="tight")
+plt.close(fig)
+print("--> 颜色条已保存: Colorbar_RedBlue_Legend.pdf")
+print("-" * 50)
+print("全部任务圆满完成！")
