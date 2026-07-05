@@ -1,0 +1,27 @@
+###Only core codes are shown for population structure analysis
+
+1.Principal component analysis (PLINK v1.9)
+/work/dengxingwang/chenjy/SQF/SoftwareInstal/plink --bfile 93SeaBarley_ForPopStruct --allow-extra-chr --pca --out 93SeaBarley_PCA_Final --threads 24
+
+2.ADMIXTURE analysis (ADMIXTURE v1.3.0; pong v1.5)
+K_START=2
+K_END=8
+REPEATS=3
+
+for K in $(seq $K_START $K_END); do
+  for REP in $(seq 1 $REPEATS); do
+    SEED=$RANDOM  
+    echo "Running K=$K, Rep=$REP, Seed=$SEED"
+  
+    admixture -s $SEED --cv 93SeaBarley_ForPopStruct_int.bed $K -j40 \
+      > log_K${K}_rep${REP}.out 2>&1
+    
+    mv 93SeaBarley_ForPopStruct_int.$K.P 93SeaBarley_ForPopStruct_int_K${K}_rep${REP}.P
+    mv 93SeaBarley_ForPopStruct_int.$K.Q 93SeaBarley_ForPopStruct_int_K${K}_rep${REP}.Q
+  done
+done
+
+/work/dengxingwang/chenjy/SQF/WGS/pong/pong/bin/pong -m pong_filemap.txt -i pong_ind2pop.txt -n pong_poporder.txt -l pong_colour.txt -o pong_93SBAdmixtureResults -p 4020
+
+3.population phylogeny (VCF2Dis v1.56)
+/work/dengxingwang/chenjy/SQF/SoftwareInstal/VCF2Dis-1.56/bin/VCF2Dis -InPut 93SBand1WB.RawSnp.vcf.gz -OutPut ./PhyloTree_Byvcf2dis/93SBand1WB_p_dis.mat -InSampleGroup pop.info
