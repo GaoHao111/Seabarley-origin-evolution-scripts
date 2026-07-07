@@ -1,0 +1,39 @@
+1.Nucleotide diversity (π)
+vcftools --gzvcf /work/dengxingwang/chenjy/SQF/WGS/93SeaBarley_MasterCore.vcf.gz --window-pi 100000 --window-pi-step 20000 --keep M2subgr1.txt --out Pi_M2subgr1
+
+2.Fixation statistics (FST)
+vcftools --gzvcf /work/dengxingwang/chenjy/SQF/WGS/93SeaBarley_MasterCore.vcf.gz --weir-fst-pop M2subgr1.txt --weir-fst-pop M2subgr2.txt --out M2subgr1vsM2subgr2 --fst-window-size 100000 --fst-window-step 20000
+
+3.Tjiama's D
+vcftools --gzvcf /work/dengxingwang/chenjy/SQF/WGS/93SeaBarley_MasterCore.vcf.gz --keep M2subgr1.txt --TajimaD 100000 --out Tajima_M2subgr1
+
+4.Runs of homozygosity (ROHs)
+/work/dengxingwang/chenjy/SQF/SoftwareInstal/plink --bfile /work/dengxingwang/chenjy/SQF/WGS/93SeaBarley_MasterCore \
+    --allow-extra-chr \
+    --chr-set 7 \
+    --homozyg \
+    --homozyg-kb 500 \
+    --homozyg-snp 50 \
+    --homozyg-density 50 \
+    --homozyg-gap 1000 \
+    --homozyg-window-missing 5 \
+    --homozyg-window-het 1 \
+    --homozyg-window-snp 50 \
+    --homozyg-window-threshold 0.05 \
+    --out 93SeaBarley_ROH
+
+5.Genome-wide heterozygosity
+/work/dengxingwang/chenjy/SQF/SoftwareInstal/plink --bfile /work/dengxingwang/chenjy/SQF/WGS/93SeaBarley_MasterCore \
+         --het \
+         --allow-extra-chr \
+         --threads 4 \
+         --out 93SeaBarley_HeterozygosityResults_NoLD
+
+6.LDdecay
+/work/dengxingwang/chenjy/SQF/SoftwareInstal/PopLDdecay-3.43/bin/PopLDdecay -InVCF ./SNP.bg.gz -SubPop ./LDdecay/M2subgr1.list -OutType 2 -OutStat ./LDdecay/M2subgr1_LDdecay
+/work/dengxingwang/chenjy/SQF/SoftwareInstal/PopLDdecay-3.43/bin/PopLDdecay -InVCF ./SNP.bg.gz -SubPop ./LDdecay/M2subgr2.list -OutType 2 -OutStat ./LDdecay/M2subgr2_LDdecay
+/work/dengxingwang/chenjy/SQF/SoftwareInstal/PopLDdecay-3.43/bin/PopLDdecay -InVCF ./SNP.bg.gz -SubPop ./LDdecay/G2.list -OutType 2 -OutStat ./LDdecay/G2_LDdecay
+/work/dengxingwang/chenjy/SQF/SoftwareInstal/PopLDdecay-3.43/bin/PopLDdecay -InVCF ./SNP.bg.gz -SubPop ./LDdecay/G4SubA.list -OutType 2 -OutStat ./LDdecay/G4SubA_LDdecay
+/work/dengxingwang/chenjy/SQF/SoftwareInstal/PopLDdecay-3.43/bin/PopLDdecay -InVCF ./SNP.bg.gz -SubPop ./LDdecay/G4SubB.list -OutType 2 -OutStat ./LDdecay/G4SubB_LDdecay
+
+perl /work/dengxingwang/chenjy/SQF/SoftwareInstal/PopLDdecay-3.43/bin/Plot_MultiPop.pl  -inList Pop.list  -output 93SeaBarleyLDdecayPopFig -KeepR
