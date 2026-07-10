@@ -1,0 +1,21 @@
+1.easySFS环境配置与fastsimcoal2安装
+conda create -p /work/dengxingwang/chenjy/SQF/CondaEnvir/easySFS -c conda-forge numpy pandas scipy -y
+conda activate /work/dengxingwang/chenjy/SQF/CondaEnvir/easySFS
+
+git clone https://github.com/isaacovercast/easySFS.git #Clone this repo
+cd easySFS
+chmod 777 easySFS.py
+./easySFS.py  
+
+手动下载压缩包fsc28_linux64.zip
+unzip fsc28_linux64.zip
+cd fsc28_linux64
+chmod +x fsc28
+
+2.确定投影值并生成等位基因频谱
+cd /work/dengxingwang/chenjy/SQF/WGS/fastsimcoal2
+/work/dengxingwang/chenjy/SQF/SoftwareInstal/easySFS/easySFS.py -i ./93SBmc_snpeffFiltered_pruned.vcf -p ./SeaBarley_pops.txt -a --preview
+/work/dengxingwang/chenjy/SQF/SoftwareInstal/easySFS/easySFS.py -i ./93SBmc_snpeffFiltered_pruned.vcf -p ./SeaBarley_pops.txt -a -o ./SeaBarleyFoldedSFS --prefix SeaBarley --proj=26,22,24,20,46
+
+3.fastsimcoal2运行
+/work/dengxingwang/chenjy/SQF/SoftwareInstal/fsc28_linux64/fsc28 -t ./SeaBarley.tpl -e ./SeaBarley.est -n 100000 -m -M -L 40 -q -c 20 -B 20
