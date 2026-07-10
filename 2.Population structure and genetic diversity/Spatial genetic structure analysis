@@ -1,0 +1,48 @@
+1.Genotype data准备
+cd /work/dengxingwang/chenjy/SQF/WGS/eems
+ln -s /work/dengxingwang/chenjy/SQF/WGS/75SeaBarley_Geno0.05QualityControl_ChrRenamed.fam 
+ln -s /work/dengxingwang/chenjy/SQF/WGS/75SeaBarley_Geno0.05QualityControl_ChrRenamed.bim 
+ln -s /work/dengxingwang/chenjy/SQF/WGS/75SeaBarley_Geno0.05QualityControl_ChrRenamed.bed 
+
+2.运行 bed2diffs，生成 EEMS 所需的差异矩阵
+/work/dengxingwang/chenjy/SQF/SoftwareInstal/eems/bed2diffs/src/bed2diffs_v1 --bfile 75SeaBarley_Geno0.05QualityControl_ChrRenamed --nthreads 8
+
+3.三个核心文件准备(.diffs; .coord; .outer)
+
+4.运行 EEMS 主程序
+/work/dengxingwang/chenjy/SQF/SoftwareInstal/eems/runeems_snps/src/runeems_snps --params SeabarleyRun.ini
+###SeabarleyRun.ini配置如下：
+datapath = /work/dengxingwang/chenjy/SQF/WGS/eems/75SeaBarley_Geno0.05QualityControl_ChrRenamed
+mcmcpath = /work/dengxingwang/chenjy/SQF/WGS/eems/Results/75SeaBarley_Geno0.05QualityControl_ChrRenamed
+nIndiv = 75
+nSites = 42528570
+nDemes = 500
+diploid = true
+numMCMCIter = 2000000
+numBurnIter = 1000000
+numThinIter = 9999
+
+5.R绘制结果
+install.packages("RcppEigen", dependencies = TRUE)
+install.packages("rEEMSplots", repos = NULL, type = "source")
+library("rEEMSplots")
+
+eems_results <- file.path("75SeaBarley_Geno0.05QualityControl_ChrRenamed")  # 输出文件路径
+name_figures <- file.path("75SB")    # 输出图片文件名前缀
+
+eems.plots(mcmcpath = eems_results,
+           plotpath = paste0(name_figures, "-output-PDFs"),  # 输出为PDF
+           longlat = TRUE,  # 指经度在前 纬度在后 FALSE反之
+           out.png = FALSE,  # 输出为PDF
+           #add.grid = TRUE,  # 可选输入文件才有
+           #col.grid = "gray90",  # 可选输入文件才有
+           #lwd.grid = 2,  # 可选输入文件才有
+           #add.outline = TRUE,  # 是否显示边界
+           #col.outline = "blue",
+           #lwd.outline = 5,
+           add.demes = TRUE,  # 显示demes
+           col.demes = "red",
+           pch.demes = 5,
+           min.cex.demes = 0.5,
+           max.cex.demes = 1.5
+)
