@@ -1,0 +1,158 @@
+0.软件安装
+0.1 #DMD编译器
+手动下载dmd.master.linux.tar.xz
+xz -d dmd.master.linux.tar.xz
+tar -xvf dmd.master.linux.tar
+export PATH=/home/data/SQF/GH/SoftwareInstallation/dmd2/linux/bin64/:$PATH
+
+0.2 #GSL安装
+手动下载gsl-latest.tar.gz
+tar -pzxvf gsl-latest.tar.gz
+cd gsl-2.8
+./configure --prefix=/home/data/SQF/GH/SoftwareInstallation/gsl-2.8
+make
+make install
+
+***Libraries have been installed in:
+/home/data/SQF/GH/SoftwareInstallation/gsl-2.8/lib
+
+0.3 #msmc2安装
+手动下载msmc2-2.1.4.zip
+unzip msmc2-2.1.4.zip
+编辑Makefile文件，修改以下内容：
+GSLDIR=/home/data/SQF/GH/SoftwareInstallation/gsl-2.8/lib #path为gsl位置
+make #安装完毕，执行程序在/home/data/SQF/GH/SoftwareInstallation/msmc2-2.1.4/build/release/msmc2
+
+0.4 #msmc-tools安装
+手动下载msmc-tools-master.zip
+unzip msmc-tools-master.zip
+
+0.5 #SNPable安装
+wget http://lh3lh3.users.sourceforge.net/download/seqbility-20091110.tar.bz2
+tar jxfv seqbility-20091110.tar.bz2
+cd seqbility-20091110
+make
+
+0.6 #msmc2_scripts安装
+手动下载msmc2_scripts-master.zip
+unzip msmc2_scripts-master.zip
+
+0.7 #安装snpable的conda环境
+conda create -n snpable
+conda activate snpable
+conda install -c bioconda samtools #samtools-1.9
+conda install -c bioconda bwa #bwa-0.7.18
+
+0.8 #安装msmc2的conda环境
+conda create -n msmc2
+conda activate msmc2
+conda install -c bioconda samtools #samtools-1.9
+conda install -c bioconda bcftools #bcftools-1.9
+
+1.代码运行
+1.1 #计算染色体平均深度
+示例：samtools depth -r chr1H /home/data/SQF/GH/WholeGenomeSequencing/78Samples_SeaBarley/PSMC/BamFile/M2_SB12.final.bam | awk '{sum += $3} END {print sum / NR}'
+
+1.2 #BAM 文件生成 VCF 和掩码文件
+bcftools mpileup -C 50 -u -r <chr> -f <ref.fa> <bam> --threads 16 | bcftools call -c -V indels --threads 16 | ./bamCaller.py <mean_cov> <out_mask.bed.gz> | bgzip -c > <out.vcf.gz>
+
+1.3 #基于snpable和msmc2_scripts中的脚本获取参考基因组的映射mask文件
+cd /home/data/SQF/GH/SoftwareInstallation/msmc2_scripts-master
+chmod -R 755 *
+cd /home/data/SQF/GH/Genome/H.marinum
+ln -s /home/data/SQF/GH/SoftwareInstallation/msmc2_scripts-master/run_snpable2.sh
+后台运行run_snpable2.sh参数
+
+1.4 #运行makeMappabilityMask.py获得最终的mask.bed.gz文件
+修改makeMappabilityMask.py文件26行为上一步mask文件路径：/home/data/SQF/GH/Genome/H.marinum/genome-mask/Hmarinum1_mask.35.50.fa
+修改29行chr为chr_name
+修改30行为：
+output_path = "/home/data/SQF/GH/Genome/H.marinum/genome-mask/mask/Hmarinum1_{}.mask.bed.gz".format(chr_name)
+mask = MaskGenerator(output_path, chr_name)
+
+cd /home/data/SQF/GH/Genome/H.marinum
+ln -s /home/data/SQF/GH/SoftwareInstallation/msmc-tools-master/makeMappabilityMask.py
+python makeMappabilityMask.py
+
+1.5 #运行generate_multihetsep.sh生成msmc2输入格式文件
+ln -s /home/data/SQF/GH/SoftwareInstallation/msmc-tools-master/generate_multihetsep.py
+创建脚本generate_multihetsep.sh
+
+1.6 #软件运行
+#群体M2.1内部分析 (2个单倍型)
+/home/data/SQF/GH/SoftwareInstallation/msmc2-2.1.4/build/release/msmc2 -o ./msmc2_results/within_pop1_M2subgr1 \
+      -I 0,1 \
+      -t 32 \
+      --skipAmbiguous \
+      ./generate_multihetsep/Seabarley_chr*.multihetsep.txt
+
+#群体M2.2内部分析 (4个单倍型)
+/home/data/SQF/GH/SoftwareInstallation/msmc2-2.1.4/build/release/msmc2 -o ./msmc2_results/within_pop2_M2subgr2 \
+      -I 2,3,4,5 \
+      -t 32 \
+      --skipAmbiguous \
+      ./generate_multihetsep/Seabarley_chr*.multihetsep.txt
+
+#群体3内部分析 (4个单倍型)
+/home/data/SQF/GH/SoftwareInstallation/msmc2-2.1.4/build/release/msmc2 -o ./msmc2_results/within_pop3_G2 \
+      -I 6,7,8,9 \
+      -t 32 \
+      --skipAmbiguous \
+      ./generate_multihetsep/Seabarley_chr*.multihetsep.txt
+
+#群体1-2间交叉分析
+/home/data/SQF/GH/SoftwareInstallation/msmc2-2.1.4/build/release/msmc2 -o ./msmc2_results/across_pop1_pop2 \
+      -I 0-2,0-3,0-4,0-5,1-2,1-3,1-4,1-5 \
+      -t 32 \
+      --skipAmbiguous \
+      ./generate_multihetsep/Seabarley_chr*.multihetsep.txt
+
+#群体1-3间交叉分析
+/home/data/SQF/GH/SoftwareInstallation/msmc2-2.1.4/build/release/msmc2 -o ./msmc2_results/across_pop1_pop3 \
+      -I 0-6,0-7,0-8,0-9,1-6,1-7,1-8,1-9 \
+      -t 32 \
+      --skipAmbiguous \
+      ./generate_multihetsep/Seabarley_chr*.multihetsep.txt
+
+#群体2-3间交叉分析
+/home/data/SQF/GH/SoftwareInstallation/msmc2-2.1.4/build/release/msmc2 -o ./msmc2_results/across_pop2_pop3 \
+      -I 2-6,2-7,2-8,2-9,3-6,3-7,3-8,3-9,4-6,4-7,4-8,4-9,5-6,5-7,5-8,5-9 \
+      -t 32 \
+      --skipAmbiguous \
+      ./generate_multihetsep/Seabarley_chr*.multihetsep.txt
+
+cd /home/data/SQF/GH/WholeGenomeSequencing/78Samples_SeaBarley/MSMC2/msmc2_results
+ln -s /home/data/SQF/GH/SoftwareInstallation/msmc-tools-master/combineCrossCoal.py
+#合并群体1-2结果
+./combineCrossCoal.py across_pop1_pop2.final.txt within_pop1_M2subgr1.final.txt within_pop2_M2subgr2.final.txt > combined_pop1_pop2.final.txt
+
+#合并群体1-3结果
+./combineCrossCoal.py across_pop1_pop3.final.txt within_pop1_M2subgr1.final.txt within_pop3_G2.final.txt > combined_pop1_pop3.final.txt
+
+#合并群体2-3结果
+./combineCrossCoal.py across_pop2_pop3.final.txt within_pop2_M2subgr2.final.txt within_pop3_G2.final.txt > combined_pop2_pop3.final.txt
+
+2.有效种群大小和交叉溯祖率绘制 (.R)
+mu <- 6.5e-9
+gen <- 0.5
+M2subgr1Dat<-read.table("within_pop1_M2subgr1.final.txt", header=TRUE)
+M2subgr2Dat<-read.table("within_pop2_M2subgr2.final.txt", header=TRUE)
+G2Dat<-read.table("within_pop3_G2.final.txt", header=TRUE)
+
+plot(G2Dat$left_time_boundary/mu*gen, (1/G2Dat$lambda)/(2*mu), log="x",ylim=c(0,100000),
+     type="n", xlab="Years ago", ylab="effective population size")
+
+lines(M2subgr1Dat$left_time_boundary/mu*gen, (1/M2subgr1Dat$lambda)/(2*mu), type="s", col="red")
+lines(M2subgr2Dat$left_time_boundary/mu*gen, (1/M2subgr2Dat$lambda)/(2*mu), type="s", col="blue")
+lines(G2Dat$left_time_boundary/mu*gen, (1/G2Dat$lambda)/(2*mu), type="s", col="yellow")
+legend("topright",legend=c("M2subgr1", "M2subgr2", "G2"), col=c("red", "blue","yellow"), lty=c(1,1))
+
+
+crossPop12Dat<-read.table("combined_pop1_pop2.final.txt", header=TRUE)
+crossPop13Dat<-read.table("combined_pop1_pop3.final.txt", header=TRUE)
+crossPop23Dat<-read.table("combined_pop2_pop3.final.txt", header=TRUE)
+plot(crossPop13Dat$left_time_boundary/mu*gen, 2 * crossPop13Dat$lambda_01 / (crossPop13Dat$lambda_00 + crossPop13Dat$lambda_11),
+     xlim=c(1000,500000),ylim=c(0,1), type="n", xlab="Years ago", ylab="relative cross-coalescence rate")
+lines(crossPop12Dat$left_time_boundary/mu*gen, 2 * crossPop12Dat$lambda_01 / (crossPop12Dat$lambda_00 + crossPop12Dat$lambda_11), type="s")
+lines(crossPop13Dat$left_time_boundary/mu*gen, 2 * crossPop13Dat$lambda_01 / (crossPop13Dat$lambda_00 + crossPop13Dat$lambda_11), type="s")
+lines(crossPop23Dat$left_time_boundary/mu*gen, 2 * crossPop23Dat$lambda_01 / (crossPop23Dat$lambda_00 + crossPop23Dat$lambda_11), type="s")
