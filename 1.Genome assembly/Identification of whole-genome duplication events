@@ -1,0 +1,60 @@
+# 核心代码展示
+1.环境配置
+conda create -n diamond
+conda activate diamond
+conda install -c bioconda diamond #diamond-2.1.13
+
+2.diamond建库比对
+2.1 #建库
+diamond makedb --in all4.pro.fa -d all4pepdb
+2.2 #进行blastp比对
+diamond blastp \
+    --query all4.pro.fa \
+    --db all4pepdb \
+    --out all4genomes_10seqs.blast \
+    --evalue 1e-5 \
+    --threads 20 \
+    --outfmt 6 \
+    --max-target-seqs 10 \
+    --sensitive 
+
+3.MCscanX寻找同源基因对
+3.1 #软件下载
+cd /home/data/SQF/GH/SoftwareInstallation
+unzip MCScanX-1.0.0.zip
+cd MCScanX-1.0.0
+make
+export PATH=$PATH:/home/data/SQF/GH/SoftwareInstallation/MCScanX-1.0.0/
+
+3.2 #文件准备
+mkdir MCscanX
+cd /home/data/SQF/GH/ComparativeGenomics/Wgd/MCscanX
+ln -s /home/data/SQF/GH/ComparativeGenomics/Wgd/Blastp/all4genomes_10seqs.blast
+ln -s /home/data/SQF/GH/ComparativeGenomics/Wgd/Blastp/gff3/all4genomes.gff all4genomes_10seqs.gff
+MCScanX ./all4genomes_10seqs
+MCScanX ./all4genomes_10seqs -b 1
+MCScanX ./all4genomes_10seqs -b 2
+
+4.基于MCscanX结果文件提取同源基因对用于后续R作图
+4.1 #提取自身与自身比较即种内比较同源基因对
+awk '$3 ~ /^HORVU.MOREX/ && $4 ~ /^HORVU.MOREX/ {print $3 "\t" $4}' all4genomes_10seqs_b1.collinearity > Hvul_Homolog_Self.txt
+awk '$3 ~ /^HORGU/ && $4 ~ /^HORGU/ {print $3 "\t" $4}' all4genomes_10seqs_b1.collinearity> Hgusso_Homolog_Self.txt
+awk '$3 ~ /^HORMA/ && $4 ~ /^HORMA/ {print $3 "\t" $4}' all4genomes_10seqs_b1.collinearity > Hmarinum_Homolog_Self.txt
+awk '$3 ~ /^evm.model.chr[1-7]Xa_m/ && $4 ~ /^evm.model.chr[1-7]Xa_m/ {print $3 "\t" $4}' all4genomes_10seqs_b1.collinearity > HnothoXam_Homolog_Self.txt
+awk '$3 ~ /^evm.model.chr[1-7]Xa_g/ && $4 ~ /^evm.model.chr[1-7]Xa_g/ {print $3 "\t" $4}' all4genomes_10seqs_b1.collinearity > HnothoXag_Homolog_Self.txt
+awk '$3 ~ /^evm\.model\.chr[1-7]Xa_m/ && $4 ~ /^evm\.model\.chr[1-7]Xa_g/ {print $3 "\t" $4}
+     $3 ~ /^evm\.model\.chr[1-7]Xa_g/ && $4 ~ /^evm\.model\.chr[1-7]Xa_m/ {print $3 "\t" $4}' all4genomes_10seqs_b1.collinearity > HnothoXamvsXag_homolog.txt
+
+4.2 #提取跨物种比较即种间比较同源基因对
+awk '(($3 ~ /^HORMA/ && $4 ~ /^HORVU.MOREX/) || 
+     ($4 ~ /^HORMA/ && $3 ~ /^HORVU.MOREX/)) {print $3 "\t" $4}' all4genomes_10seqs_b2.collinearity > HmarvsHvul_homolog.txt
+awk '(($3 ~ /^HORGU/ && $4 ~ /^HORVU.MOREX/) || 
+     ($4 ~ /^HORGU/ && $3 ~ /^HORVU.MOREX/)) {print $3 "\t" $4}' all4genomes_10seqs_b2.collinearity > HgussovsHvul_homolog.txt
+awk '(($3 ~ /chr[1-7]Xa_m/ && $4 ~ /^HORMA/) || 
+     ($4 ~ /chr[1-7]Xa_m/ && $3 ~ /^HORMA/)) {print $3 "\t" $4}' all4genomes_10seqs_b2.collinearity > HnotXamvsHmar_homolog.txt
+awk '(($3 ~ /chr[1-7]Xa_g/ && $4 ~ /^HORGU/) || 
+     ($4 ~ /chr[1-7]Xa_g/ && $3 ~ /^HORGU/)) {print $3 "\t" $4}' all4genomes_10seqs_b2.collinearity > HnotXagvsHgusso_homolog.txt
+awk '(($3 ~ /^HORMA/ && $4 ~ /^HORGU/) || 
+     ($4 ~ /^HORMA/ && $3 ~ /^HORGU/)) {print $3 "\t" $4}' all4genomes_10seqs_b2.collinearity > HmarvsHvul_homolog.txt
+
+5.merged_cds文件配置用于TBtools进行Ks计算
