@@ -1,0 +1,78 @@
+#处理 diploid gussoneanum (G2) 的DNA转座子作为示例
+1.基于gff3注释文件提取基因区域
+awk '$3=="gene"' Hgusso34.gff3 | \
+awk -v OFS="\t" '{
+    gene_id = $9;
+    sub(/.*ID=/, "", gene_id);   # 删除ID=之前的部分
+    sub(/[; ].*/, "", gene_id);  # 删除分号或空格后的部分
+    print $1, $4-1, $5, gene_id, ".", $7
+}' > genes_body.bed
+
+2.从EDTA的结果文件GFF中提取DNA类转座子
+grep "classification=DNA/" Hgusso34_TransposableElement.gff | \
+awk -v OFS="\t" '{
+    start = $4 - 1;
+    if (start < 0) start = 0;
+    
+    # 解析attributes字段
+    cls = ""; name = "";
+    split($9, parts, ";");
+    for (i=1; i<=length(parts); i++) {
+        if (parts[i] ~ /^classification=/) {
+            split(parts[i], t, "=");
+            cls = t[2];
+        }
+        if (parts[i] ~ /^Name=/) {
+            split(parts[i], t, "=");
+            name = t[2];
+        }
+    }
+    print $1, start, $5, name, ".", $7, cls
+}' | sort -k1,1 -k2,2n > DNA_TEs_sorted.bed
+
+3.基于基因组fasta文件获取染色体大小
+samtools faidx Hgusso34_final.fa
+cut -f1,2 Hgusso34_final.fa.fai > chrom.sizes
+
+4.使用bedtools genomecov将DNA转座子位置转换为覆盖度文件
+4.1 #先修复可能的坐标问题
+awk -v OFS="\t" '{
+    if ($2 < 0) $2 = 0;
+    if ($2 >= $3) $3 = $2 + 100;
+    print $1, $2, $3, $4, $5, $6
+}' DNA_TEs_unique.bed > DNA_TEs_fixed.bed
+4.2 #bedtools genomecov将DNA转座子位置转换为覆盖度文件
+bedtools genomecov -bga -i DNA_TEs_fixed.bed -g chrom.sizes > DNA_TE_coverage.bedgraph
+
+5.转换为bigWig格式
+bedGraphToBigWig DNA_TE_coverage.bedgraph chrom.sizes DNA_TE_density.bw
+
+6.创建矩阵绘制分布图
+#创建矩阵
+computeMatrix scale-regions \
+  -S DNA_TE_density.bw \
+  -R genes_body.bed \
+  --regionBodyLength 5000 \
+  --beforeRegionStartLength 5000 \
+  --afterRegionStartLength 5000 \
+  --binSize 50 \
+  --skipZeros \
+  --missingDataAsZero \
+  --numberOfProcessors 8 \
+  -o DNA_TE_matrix_scale.gz \
+  --outFileSortedRegions genes_sorted.bed
+
+#绘制分布图
+plotProfile \
+  -m DNA_TE_matrix_scale.gz \
+  -out DNA_TE_density_profile.pdf \
+  --plotHeight 10 \
+  --plotWidth 15 \
+  --colors "#4DBBD5" \
+  --yAxisLabel "DNA TE Density" \
+  --perGroup \
+  --startLabel "TSS" \
+  --endLabel "TES" \
+  --plotTitle "DNA Transposon Distribution around Genes" \
+  --legendLocation upper-right \
+  --refPointLabel "Gene Body"
