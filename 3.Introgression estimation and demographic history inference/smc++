@@ -1,0 +1,45 @@
+1.smc++软件安装
+conda create -n smcpp python=3.9
+conda activate smcpp
+conda install -c conda-forge tqdm
+conda install -c conda-forge libdeflate=1.14
+conda install -c conda-forge libnghttp2=1.46.0
+conda install -c conda-forge libcurl=7.81.0
+conda install -c bioconda pysam=0.18
+conda install -c bioconda smcpp
+
+2.代码运行
+2.1 #建立tabix索引
+tabix -p vcf ./AdmixtureAnalysis/75SBQcRenamedReseqdata.vcf.gz
+
+2.2 #smc++文件格式转换
+# 并行运行 M2.1 的任务
+printf "%s\n" {1..7} | parallel -j 7 smc++ vcf2smc ./AdmixtureAnalysis/75SBQcRenamedReseqdata.vcf.gz ./smc++/M2.1All/M2.1_chr{}.smc.gz {} "M2.1:M2_SB1,M2_SB12,M2_SB13,M2_SB14,M2_SB15,M2_SB16,M2_SB17,M2_SB18,M2_SB19,M2_SB20,M2_SB66,M2_SB70,M2_SB71"
+
+# 并行运行 M2.2 的任务
+printf "%s\n" {1..7} | parallel -j 7 smc++ vcf2smc ./AdmixtureAnalysis/75SBQcRenamedReseqdata.vcf.gz ./smc++/M2.2All/M2.2_chr{}.smc.gz {} "M2.2:M2_SB3,M2_SB22,M2_SB10,M2_SB11,M2_SB2,M2_SB21,M2_SB23,M2_SB24,M2_SB25,M2_SB26,M2_SB27,M2_SB28,M2_SB29,M2_SB4,M2_SB5,M2_SB6,M2_SB64,M2_SB65,M2_SB69,M2_SB7,M2_SB72,M2_SB73,M2_SB74,M2_SB75,M2_SB76,M2_SB8,M2_SB9"
+
+# 并行运行 G2 的任务
+printf "%s\n" {1..7} | parallel -j 7 smc++ vcf2smc ./AdmixtureAnalysis/75SBQcRenamedReseqdata.vcf.gz ./smc++/G2All/G2_chr{}.smc.gz {} "G2:G2_SB60,G2_SB62,G2_SB77,G2_SB82,G2_SB30,G2_SB32,G2_SB34,G2_SB35,G2_SB37,G2_SB41,G2_SB42,G2_SB43,G2_SB44,G2_SB49,G2_SB52,G2_SB61,G2_SB78"
+
+2.3 #有效种群大小分析
+smc++ estimate --spline cubic --knots 15 --timepoints 1000 1000000  --cores 20 -o ./smc++/M2.1All 3.66e-09 ./smc++/M2.1All/*.smc.gz
+smc++ estimate --spline cubic --knots 15 --timepoints 1000 1000000  --cores 20 -o ./smc++/M2.2All 3.66e-09 ./smc++/M2.2All/*.smc.gz
+smc++ estimate --spline cubic --knots 15 --timepoints 1000 1000000  --cores 20 -o ./smc++/G2All 3.66e-09 ./smc++/G2All/*.smc.gz
+
+并行运行代码
+#!/bin/bash
+
+# 定义 smc++ estimate 命令的公共参数
+common_params="--spline cubic --knots 15 --timepoints 1000 1000000 --cores 20 --regularization-penalty 10 --polarization-error 0.7 --ftol 1e-5 --em-iterations 30"
+
+# 并行运行 smc++ estimate 命令
+parallel -j 4 smc++ estimate $common_params -o ./smc++/{1}All 3.66e-09 ./smc++/{1}All/*.smc.gz ::: M2.1 M2.2 G2 G4
+
+
+2.4 #一次绘制3个或多个群的信息
+cp ./M2.1All6.5mu0.5g/model.final.json ./PlotAll6.5mu0.5g/M2.1.model.final.json
+cp ./M2.2All6.5mu0.5g/model.final.json ./PlotAll6.5mu0.5g/M2.2.model.final.json
+cp ./G2All6.5mu0.5g/model.final.json ./PlotAll6.5mu0.5g/G2.model.final.json
+
+smc++ plot ./PlotAll6.5mu0.5g/SeaBarley.EffPopSizeExceptG4.pdf ./PlotAll6.5mu0.5g/M2.1.model.final.json ./PlotAll6.5mu0.5g/M2.2.model.final.json ./PlotAll6.5mu0.5g/G2.model.final.json -g 0.5 --ylim 0 100000000 -c
