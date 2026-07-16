@@ -1,0 +1,15 @@
+1.环境配置
+conda create -n astral
+conda activate astral #aster-1.23
+
+git clone https://github.com/zhangrengang/phytop
+cd phytop
+conda env create -f phytop.yaml
+conda activate phytop
+python setup.py install
+
+2.软件运行
+cd /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/Phytop
+cp /media/langchao/34e000e7-97b5-46f1-a86f-71b5b6c91ae4/SQF/GH/ComparativeGenomics/PhylogeneticTree/pep/OrthoFinder/Results_Oct30/ASTRAL/all_genetrees_species_only.tre .
+astral -i all_genetrees_species_only.tre -o astralForphytop.tree -u 2 -t 16
+phytop astralForphytop.tree
