@@ -1,0 +1,42 @@
+1.jcvi环境配置
+conda create -n jcvi python=3.9
+conda activate jcvi
+conda install -c bioconda jcvi #jcvi 1.5.7
+conda install -c bioconda bedtools last
+conda install -c bioconda blast
+
+2.gff3文件转为bed文件
+python -m jcvi.formats.gff bed --type=mRNA ./gff3/Hma.20200115.HC.gff -o ./bed/Hma1.bed #Extracted 41045 features
+python -m jcvi.formats.gff bed --type=mRNA ./gff3/Hgusso34.Final.gff -o ./bed/Hgu34.bed #Extracted 42339 features
+python -m jcvi.formats.gff bed --type=mRNA ./gff3/Hno58.gff3 -o ./bed/Hno58.bed #Extracted 70257 features
+python -m jcvi.formats.gff bed --type=mRNA ./gff3/Hno58_Xam.gff -o ./bed/Hno58_Xam.bed #Extracted 33801 features
+python -m jcvi.formats.gff bed --type=mRNA ./gff3/Hno58_Xag.gff -o ./bed/Hno58_Xag.bed #Extracted 33482 features
+
+3.格式化序列文件
+python -m jcvi.formats.fasta format Hma1.cds.fa Hma1.cds
+python -m jcvi.formats.fasta format Hgusso34.cds.fa Hgu34.cds
+python -m jcvi.formats.fasta format Hno58.cds.fa Hno58.cds
+python -m jcvi.formats.fasta format Hno58_Xam.cds.fa Hno58_Xam.cds
+python -m jcvi.formats.fasta format Hno58_Xag.cds.fa Hno58_Xag.cds
+
+4.共线性模块鉴定
+mkdir compara && cd compara
+cp ../cds/*.cds ./
+cp ../bed/*.bed ./
+
+python -m jcvi.compara.catalog ortholog --cscore=.99 --no_strip_names --cpus=4 Hno58 Hma1 #--no_strip_names 加上这个参数时，程序会原封不动地使用完整的基因标识符
+python -m jcvi.compara.catalog ortholog --cscore=.99 --no_strip_names --cpus=4 Hno58 Hgu34
+python -m jcvi.compara.catalog ortholog --cscore=.99 --no_strip_names --cpus=4 Hma1 Hgu34
+python -m jcvi.compara.catalog ortholog --cscore=.99 --no_strip_names --cpus=4 Hno58_Xam Hma1
+python -m jcvi.compara.catalog ortholog --cscore=.99 --no_strip_names --cpus=4 Hno58_Xag Hgu34
+
+5.对初步生成的共线性区块文件（species1.species2.anchors）进行过滤和简化，以保留更可靠、更显著的共线性区块，并输出一个新的、更简洁的锚点文件（species1.species2.anchors.new），用于后续绘图
+python -m jcvi.compara.synteny screen --minspan=30 --simple Hno58.Hma1.anchors Hno58.Hma1.anchors.new
+python -m jcvi.compara.synteny screen --minspan=30 --simple Hno58.Hgu34.anchors Hno58.Hgu34.anchors.new
+python -m jcvi.compara.synteny screen --minspan=30 --simple Hma1.Hgu34.anchors Hma1.Hgu34.anchors.new
+python -m jcvi.compara.synteny screen --minspan=30 --simple Hno58_Xam.Hma1.anchors Hno58_Xam.Hma1.anchors.new
+python -m jcvi.compara.synteny screen --minspan=30 --simple Hno58_Xag.Hgu34.anchors Hno58_Xag.Hgu34.anchors.new
+
+6.共线性关系图(Karyotype)绘制
+python -m jcvi.graphics.karyotype seqids layout #G4基因组未拆分，直接G4与M2比较以及G4与G2比较
+python -m jcvi.graphics.karyotype seqids4 layout4#G4基因组拆分，即G4_A subgenome与M2比较以及G4_B subgenome与G2比较
