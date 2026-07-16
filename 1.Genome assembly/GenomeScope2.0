@@ -1,0 +1,22 @@
+1.环境配置
+conda create -n kmc
+conda activate kmc 
+conda install -c bioconda kmc #kmc-3.2.4
+
+2.利用KMC高效计算k-mer频率
+mkdir tmp
+ls G4_SB58_*.fq.gz > FILES
+kmc -k31 -t16 -m24 -ci1 -cs10000 @FILES k31db tmp #计算k-mer频率
+
+###参数解释：
+①k31: 使用k-mer长度为31
+②t16: 使用16个线程
+③m24: 使用24GB内存
+④ci1: 忽略出现次数低于1的k-mer
+⑤cs10000: 设置最大k-mer计数为10000
+
+3.生成k-mer直方图
+kmc_tools transform k31db histogram k31db.histo -cx10000
+
+4.GenomeScope2.0分析k-mer频谱并估计基因组特性
+将k31db.histo文件导入GenomeScope2.0网页版(http://genomescope.org/genomescope2.0/)，参数设置k-mer lenth 31; Ploidy 4; Max k-mer coverage 10000
